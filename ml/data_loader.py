@@ -1,17 +1,17 @@
 import pandas as pd
+from pathlib import Path
 
 def load_data(file):
-    """
-    file: file path (string) OR Streamlit UploadedFile
-    """
+    file = Path(file)
 
-    if hasattr(file, "read"):
-        # Uploaded file
-        df = pd.read_csv(file)
-    else:
-        df = pd.read_csv(file)
+    if not file.exists():
+        raise FileNotFoundError(f"Dataset not found: {file}")
 
-    X = df.iloc[:, :-1]
-    y = df.iloc[:, -1]
+    df = pd.read_csv(file)
 
-    return X, y
+    # Assume last column is target (defect label)
+    X = df.iloc[:, :-1].values
+    y = df.iloc[:, -1].values
+    feature_names = df.columns[:-1]
+
+    return X, y, feature_names
