@@ -28,16 +28,16 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🧠 Hybrid Swarm-Optimized Software Defect Prediction")
+st.title("🧠 Hybrid Swarm-Optimized Software Defect Prediction System")
 st.write(
-    "Static feature selection using GA, ACO, PSO, Hybrid methods "
-    "for software defect prediction."
+    "This system predicts **defective software modules** using "
+    "**static swarm-based feature selection** and machine learning."
 )
 
 # ================= LOAD DATASETS =================
 csv_files = list(DATA_DIR.glob("*.csv"))
 if not csv_files:
-    st.error("❌ No CSV datasets found in data/ folder")
+    st.error("❌ No CSV datasets found inside the data/ folder")
     st.stop()
 
 DATASETS = {f.stem.upper(): f for f in csv_files}
@@ -45,11 +45,11 @@ DATASETS = {f.stem.upper(): f for f in csv_files}
 # ================= FEATURE SELECTION METHODS =================
 FS_METHODS = {
     "None (All Features)": fs_none,
-    "RFE-RF": fs_rfe_rf,
-    "Genetic Algorithm": fs_ga,
-    "Ant Colony Optimization": fs_aco,
-    "Particle Swarm Optimization": fs_pso,
-    "Hybrid (GA + PSO)": fs_hybrid,
+    "RFE-RF (√N features)": fs_rfe_rf,
+    "Genetic Algorithm (40%)": fs_ga,
+    "Ant Colony Optimization (30%)": fs_aco,
+    "Particle Swarm Optimization (35%)": fs_pso,
+    "Hybrid GA + PSO (25%)": fs_hybrid,
 }
 
 # ================= SIDEBAR =================
@@ -71,38 +71,46 @@ run_btn = st.sidebar.button("🚀 Run Prediction")
 if run_btn:
     dataset_path = DATASETS[dataset]
 
-    # Load & preprocess data
+    # Load data
     X, y, feature_names = preprocess_data(dataset_path)
 
     # ---- STATIC FEATURE SELECTION ----
-    X_sel, selected_features = FS_METHODS[fs_choice](
-        X, y, feature_names
-    )
+    fs_func = FS_METHODS[fs_choice]
+
+    try:
+        X_sel, selected_features = fs_func(X, y, feature_names)
+    except TypeError as e:
+        st.error(
+            "❌ Feature selection function argument mismatch.\n\n"
+            "Please ensure all feature selection functions accept exactly "
+            "`(X, y, feature_names)` and redeploy the app."
+        )
+        st.stop()
 
     # Train model
     results = train_model(X_sel, y)
 
     # ================= RESULTS =================
-    st.subheader("📊 Performance Metrics")
+    st.markdown("## 📊 Performance Metrics")
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Accuracy", round(results["accuracy"], 3))
     c2.metric("Precision", round(results["precision"], 3))
     c3.metric("Recall", round(results["recall"], 3))
     c4.metric("F1 Score", round(results["f1"], 3))
 
-    st.subheader("🧩 Selected Features")
+    st.markdown("## 🧩 Selected Features")
     st.write(selected_features)
     st.write(f"**Total Selected:** {len(selected_features)}")
 
-    st.subheader("📉 Confusion Matrix")
+    st.markdown("## 📉 Confusion Matrix")
     st.pyplot(plot_confusion(results["y_test"], results["y_pred"]))
 
-    st.subheader("📈 ROC Curve")
+    st.markdown("## 📈 ROC Curve")
     roc_fig, auc_val = plot_roc(results["y_test"], results["y_prob"])
     st.pyplot(roc_fig)
-    st.write(f"**AUC:** {auc_val:.3f}")
+    st.write(f"**AUC Score:** {auc_val:.3f}")
 
-    st.subheader("📋 Comparison Summary")
+    st.markdown("## 📋 Comparison Summary")
     st.table(pd.DataFrame([{
         "Dataset": dataset,
         "Feature Selection": fs_choice,
@@ -114,14 +122,15 @@ if run_btn:
         "AUC": auc_val
     }]))
 
-    st.subheader("📄 Auto-Generated Report")
+    st.markdown("## 📄 Auto-Generated Report")
     st.write(
         f"""
-        The **{dataset} dataset** was evaluated using a **Random Forest classifier**
-        with **{fs_choice} static feature selection**.
+        The **{dataset} dataset** was analyzed using a **Random Forest classifier**
+        combined with **{fs_choice}-based static feature selection**.
 
-        Swarm-based methods automatically selected the most relevant
-        software metrics, improving defect prediction accuracy
-        while reducing dimensionality.
+        The swarm-inspired approach automatically selects the most relevant
+        software metrics, reducing dimensionality while improving defect
+        prediction accuracy.  
+        This helps testing teams focus on **high-risk modules first**.
         """
     )
