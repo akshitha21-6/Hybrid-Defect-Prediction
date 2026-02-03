@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
 ML_DIR = ROOT / "ml"
-sys.path.append(str(ML_DIR))
+sys.path.insert(0, str(ML_DIR))
 # =============================================
 
 from preprocess import preprocess_data
@@ -37,7 +37,7 @@ st.write(
 # ================= LOAD DATASETS =================
 csv_files = list(DATA_DIR.glob("*.csv"))
 if not csv_files:
-    st.error("❌ No CSV datasets found inside the data/ folder")
+    st.error("❌ No CSV datasets found in the data/ folder")
     st.stop()
 
 DATASETS = {f.stem.upper(): f for f in csv_files}
@@ -45,11 +45,11 @@ DATASETS = {f.stem.upper(): f for f in csv_files}
 # ================= FEATURE SELECTION METHODS =================
 FS_METHODS = {
     "None (All Features)": fs_none,
-    "RFE-RF (√N features)": fs_rfe_rf,
-    "Genetic Algorithm (40%)": fs_ga,
-    "Ant Colony Optimization (30%)": fs_aco,
-    "Particle Swarm Optimization (35%)": fs_pso,
-    "Hybrid GA + PSO (25%)": fs_hybrid,
+    "RFE + Random Forest": fs_rfe_rf,
+    "Genetic Algorithm": fs_ga,
+    "Ant Colony Optimization": fs_aco,
+    "Particle Swarm Optimization": fs_pso,
+    "Hybrid (GA + PSO)": fs_hybrid,
 }
 
 # ================= SIDEBAR =================
@@ -71,23 +71,17 @@ run_btn = st.sidebar.button("🚀 Run Prediction")
 if run_btn:
     dataset_path = DATASETS[dataset]
 
-    # Load data
+    # -------- Load data --------
     X, y, feature_names = preprocess_data(dataset_path)
 
-    # ---- STATIC FEATURE SELECTION ----
+    # -------- Feature Selection (STATIC) --------
     fs_func = FS_METHODS[fs_choice]
 
-    try:
-        X_sel, selected_features = fs_func(X, y, feature_names)
-    except TypeError as e:
-        st.error(
-            "❌ Feature selection function argument mismatch.\n\n"
-            "Please ensure all feature selection functions accept exactly "
-            "`(X, y, feature_names)` and redeploy the app."
-        )
-        st.stop()
+    X_sel, selected_features = fs_func(
+        X, y, feature_names
+    )
 
-    # Train model
+    # -------- Train model --------
     results = train_model(X_sel, y)
 
     # ================= RESULTS =================
@@ -100,13 +94,16 @@ if run_btn:
 
     st.markdown("## 🧩 Selected Features")
     st.write(selected_features)
-    st.write(f"**Total Selected:** {len(selected_features)}")
+    st.info(f"Total selected features: **{len(selected_features)}**")
 
     st.markdown("## 📉 Confusion Matrix")
     st.pyplot(plot_confusion(results["y_test"], results["y_pred"]))
 
     st.markdown("## 📈 ROC Curve")
-    roc_fig, auc_val = plot_roc(results["y_test"], results["y_prob"])
+    roc_fig, auc_val = plot_roc(
+        results["y_test"],
+        results["y_prob"]
+    )
     st.pyplot(roc_fig)
     st.write(f"**AUC Score:** {auc_val:.3f}")
 
@@ -118,19 +115,17 @@ if run_btn:
         "Accuracy": results["accuracy"],
         "Precision": results["precision"],
         "Recall": results["recall"],
-        "F1": results["f1"],
+        "F1 Score": results["f1"],
         "AUC": auc_val
     }]))
 
     st.markdown("## 📄 Auto-Generated Report")
     st.write(
         f"""
-        The **{dataset} dataset** was analyzed using a **Random Forest classifier**
-        combined with **{fs_choice}-based static feature selection**.
+        The **{dataset} dataset** was evaluated using a **Random Forest classifier**
+        with **{fs_choice} static feature selection**.
 
-        The swarm-inspired approach automatically selects the most relevant
-        software metrics, reducing dimensionality while improving defect
-        prediction accuracy.  
-        This helps testing teams focus on **high-risk modules first**.
+        Swarm-based optimization reduces dimensionality while improving defect
+        detection accuracy, allowing testers to focus on **high-risk modules first**.
         """
     )
