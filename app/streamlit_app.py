@@ -1,3 +1,59 @@
+import streamlit as st
+import pandas as pd
+import sys
+from pathlib import Path
+
+# ================= PATH SETUP =================
+ROOT = Path(__file__).resolve().parent.parent
+DATA_DIR = ROOT / "data"
+ML_DIR = ROOT / "ml"
+sys.path.append(str(ML_DIR))
+# =============================================
+
+from preprocess import preprocess_data
+from feature_selection import (
+    fs_none, fs_rfe_rf, fs_ga, fs_aco, fs_pso, fs_hybrid
+)
+from models import train_model
+from evaluation import plot_confusion, plot_roc
+
+# ================= PAGE CONFIG =================
+st.set_page_config(
+    page_title="Hybrid Software Defect Prediction",
+    layout="wide"
+)
+
+st.title("🧠 Hybrid Swarm-Optimized Software Defect Prediction System")
+st.write(
+    "This system predicts **defective software modules** using "
+    "**static hybrid swarm-based feature selection**."
+)
+
+# ================= LOAD DATASETS =================
+csv_files = list(DATA_DIR.glob("*.csv"))
+if not csv_files:
+    st.error("❌ No CSV datasets found inside data/ folder")
+    st.stop()
+
+DATASETS = {f.stem.upper(): f for f in csv_files}
+
+# ================= FEATURE SELECTION METHODS =================
+FS_METHODS = {
+    "None (All Features)": fs_none,
+    "RFE-RF": fs_rfe_rf,
+    "Genetic Algorithm": fs_ga,
+    "Ant Colony Optimization": fs_aco,
+    "Particle Swarm Optimization": fs_pso,
+    "Hybrid (GA + PSO)": fs_hybrid,
+}
+
+# ================= SIDEBAR =================
+st.sidebar.header("⚙️ Configuration")
+
+dataset = st.sidebar.selectbox("📂 Dataset", list(DATASETS.keys()))
+fs_choice = st.sidebar.selectbox("🧠 Feature Selection Method", list(FS_METHODS.keys()))
+run_btn = st.sidebar.button("🚀 Run Prediction")
+
 # ================= MAIN PIPELINE =================
 if run_btn:
     dataset_path = DATASETS[dataset]
@@ -5,7 +61,7 @@ if run_btn:
     # Load data
     X, y, feature_names = preprocess_data(dataset_path)
 
-    # ---- STATIC FEATURE SELECTION ----
+    # Static feature selection (NO slider)
     X_sel, selected_features = FS_METHODS[fs_choice](
         X, y, feature_names
     )
@@ -49,11 +105,10 @@ if run_btn:
     st.write(
         f"""
         The **{dataset} dataset** was evaluated using a **Random Forest classifier**
-        with **{fs_choice} static feature selection** and **SMOTE**
-        for class imbalance handling.
+        with **{fs_choice}-based static feature selection**.
 
-        Static swarm-based feature selection automatically determines
-        the most relevant software metrics, reducing dimensionality
-        while improving defect prediction accuracy.
+        This approach automatically determines an optimal subset of features
+        without manual tuning, improving stability and deployment readiness
+        for Streamlit Cloud.
         """
     )
