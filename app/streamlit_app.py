@@ -26,63 +26,45 @@ st.set_page_config(
 st.title("🧠 Hybrid Swarm-Optimized Software Defect Prediction System")
 st.write(
     "This system predicts **defective software modules** using "
-    "hybrid swarm-based feature selection and machine learning."
+    "static swarm-based feature selection and machine learning."
 )
 
 # ================= LOAD DATASETS =================
 csv_files = list(DATA_DIR.glob("*.csv"))
 if not csv_files:
-    st.error("❌ No CSV datasets found inside the data/ folder")
+    st.error("❌ No CSV datasets found in data/ folder")
     st.stop()
 
 DATASETS = {f.stem.upper(): f for f in csv_files}
 
 # ================= FEATURE SELECTION METHODS =================
 FS_METHODS = {
-    "None": fs_none,
+    "None (All Features)": fs_none,
     "RFE-RF": fs_rfe_rf,
-    "GA": fs_ga,
-    "ACO": fs_aco,
-    "PSO": fs_pso,
+    "Genetic Algorithm": fs_ga,
+    "Ant Colony Optimization": fs_aco,
+    "Particle Swarm Optimization": fs_pso,
     "Hybrid (GA + PSO)": fs_hybrid,
 }
 
 # ================= SIDEBAR =================
 st.sidebar.header("⚙️ Configuration")
 
-dataset = st.sidebar.selectbox(
-    "📂 Select Dataset",
-    list(DATASETS.keys())
-)
-
-fs_choice = st.sidebar.selectbox(
-    "🧠 Feature Selection Method",
-    list(FS_METHODS.keys())
-)
-
+dataset = st.sidebar.selectbox("📂 Dataset", list(DATASETS.keys()))
+fs_choice = st.sidebar.selectbox("🧠 Feature Selection Method", list(FS_METHODS.keys()))
 run_btn = st.sidebar.button("🚀 Run Prediction")
 
 # ================= MAIN PIPELINE =================
 if run_btn:
     dataset_path = DATASETS[dataset]
 
-    # Load and preprocess
     X, y, feature_names = preprocess_data(dataset_path)
 
-    # ---- Dynamic feature selection slider ----
-    num_features = st.sidebar.slider(
-        "🔢 Number of Features to Select",
-        min_value=3,
-        max_value=len(feature_names),
-        value=min(5, len(feature_names))
-    )
-
-    # Feature selection
+    # ---- STATIC FEATURE SELECTION ----
     X_sel, selected_features = FS_METHODS[fs_choice](
-        X, y, feature_names, num_features
+        X, y, feature_names
     )
 
-    # Train model
     results = train_model(X_sel, y)
 
     # ================= RESULTS =================
@@ -95,6 +77,7 @@ if run_btn:
 
     st.markdown("## 🧩 Selected Features")
     st.write(selected_features)
+    st.write(f"**Total Selected:** {len(selected_features)}")
 
     st.markdown("## 📉 Confusion Matrix")
     st.pyplot(plot_confusion(results["y_test"], results["y_pred"]))
@@ -108,7 +91,7 @@ if run_btn:
     st.table(pd.DataFrame([{
         "Dataset": dataset,
         "Feature Selection": fs_choice,
-        "No. of Features": num_features,
+        "Selected Features": len(selected_features),
         "Accuracy": results["accuracy"],
         "Precision": results["precision"],
         "Recall": results["recall"],
@@ -120,10 +103,11 @@ if run_btn:
     st.write(
         f"""
         The **{dataset} dataset** was evaluated using a **Random Forest classifier**
-        with **{fs_choice} feature selection** and **SMOTE** for class imbalance handling.
+        with **{fs_choice}-based static feature selection** and **SMOTE**
+        for class imbalance handling.
 
-        By selecting **{num_features} important software metrics**, the system improves
-        defect prediction accuracy while reducing testing effort.  
-        This helps developers focus on **high-risk modules first**.
+        The hybrid swarm approach automatically identifies the most relevant
+        software metrics, reducing dimensionality while improving defect
+        prediction accuracy.
         """
     )
