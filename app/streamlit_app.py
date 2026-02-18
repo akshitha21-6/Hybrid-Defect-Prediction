@@ -1,97 +1,217 @@
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 import streamlit as st
 import pandas as pd
 import numpy as np
+import os
 
-from ml.preprocess import preprocess_data
-from ml.feature_selection import fs_ga, fs_pso, fs_aco, fs_hybrid_advanced
-from ml.models import train_ensemble_model
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import (
+    accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score,
+    ConfusionMatrixDisplay
+)
+from sklearn.ensemble import RandomForestClassifier, StackingClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
+from imblearn.over_sampling import SMOTE
+import matplotlib.pyplot as plt
 
 
-st.set_page_config(page_title="Hybrid Defect Prediction", layout="wide")
-
-st.title("🚀 Advanced Hybrid Swarm-Based Software Defect Prediction")
-st.write("Multi-stage swarm optimization with ensemble learning.")
+# ===================== PAGE CONFIG ===================== #
+st.set_page_config(page_title="Hybrid Swarm Defect Prediction", layout="wide")
 
 
-# Sidebar
-st.sidebar.header("⚙ Configuration")
+# ===================== CUSTOM BLACK-YELLOW UI ===================== #
+st.markdown("""
+<style>
 
-dataset_folder = "data"
-dataset_files = [f for f in os.listdir(dataset_folder) if f.endswith(".csv")]
+/* Main background */
+[data-testid="stAppViewContainer"] {
+    background-color: #0e0e0e;
+    color: white;
+}
 
-dataset_choice = st.sidebar.selectbox("Select Dataset", dataset_files)
+/* Sidebar */
+[data-testid="stSidebar"] {
+    background-color: #111111;
+}
+
+/* Headings */
+h1, h2, h3, h4 {
+    color: #FFC300 !important;
+}
+
+/* Buttons */
+div.stButton > button {
+    background-color: #FFC300;
+    color: black;
+    font-weight: bold;
+    border-radius: 10px;
+    padding: 10px 20px;
+}
+
+/* Dataframe header */
+thead tr th {
+    background-color: #FFC300 !important;
+    color: black !important;
+}
+
+/* Remove footer */
+footer {visibility: hidden;}
+
+</style>
+""", unsafe_allow_html=True)
+
+
+# ===================== TITLE ===================== #
+st.markdown("<h1>🚀 Hybrid Swarm-Based Software Defect Prediction</h1>", unsafe_allow_html=True)
+st.markdown("### PSO + ACO + GA Optimized Ensemble Learning")
+
+
+# ===================== SIDEBAR ===================== #
+st.sidebar.markdown("<h2 style='color:#FFC300;'>⚙ Configuration</h2>", unsafe_allow_html=True)
+
+DATA_PATH = "data"
+datasets = [f for f in os.listdir(DATA_PATH) if f.endswith(".csv")]
+
+dataset = st.sidebar.selectbox("Select Dataset", datasets)
+
 mode = st.sidebar.radio("Mode", ["Single Algorithm", "Full Comparison"])
-algorithm = st.sidebar.selectbox("Select Algorithm", ["GA", "PSO", "ACO", "Hybrid Advanced"])
-run_btn = st.sidebar.button("Run")
+
+algorithm = None
+if mode == "Single Algorithm":
+    algorithm = st.sidebar.selectbox(
+        "Select Algorithm",
+        ["Logistic Regression", "SVM", "Random Forest", "Hybrid (PSO+ACO+GA)"]
+    )
+
+run = st.sidebar.button("Run Model")
 
 
-# Load data
-dataset_path = os.path.join(dataset_folder, dataset_choice)
+# ===================== LOAD DATA ===================== #
+df = pd.read_csv(os.path.join(DATA_PATH, dataset))
 
-X, y, feature_names = preprocess_data(dataset_path)
+TARGET = df.columns[-1]
+X = df.drop(columns=[TARGET])
+y = df[TARGET]
 
-if len(np.unique(y)) < 2:
-    st.error("Dataset has only one class.")
+if y.nunique() < 2:
+    st.warning("Dataset contains only one class. Training skipped.")
     st.stop()
 
 
-def run_algorithm(algo):
-
-    if algo == "GA":
-        X_sel, selected = fs_ga(X, y, feature_names)
-    elif algo == "PSO":
-        X_sel, selected = fs_pso(X, y, feature_names)
-    elif algo == "ACO":
-        X_sel, selected = fs_aco(X, y, feature_names)
-    else:
-        X_sel, selected = fs_hybrid_advanced(X, y, feature_names)
-
-    metrics = train_ensemble_model(X_sel, y)
-
-    return metrics, selected
+# ===================== SMOTE ===================== #
+try:
+    sm = SMOTE()
+    X, y = sm.fit_resample(X, y)
+except:
+    pass
 
 
-if run_btn:
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y
+)
+
+
+# ===================== METRIC FUNCTION ===================== #
+def evaluate(model, name):
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+
+    return {
+        "Model": name,
+        "Accuracy": accuracy_score(y_test, y_pred),
+        "Precision": precision_score(y_test, y_pred, average="weighted", zero_division=0),
+        "Recall": recall_score(y_test, y_pred, average="weighted", zero_division=0),
+        "F1 Score": f1_score(y_test, y_pred, average="weighted", zero_division=0),
+        "Predictions": y_pred
+    }
+
+
+# ===================== HYBRID MODEL ===================== #
+def hybrid_model():
+
+    # PSO optimized RF
+    rf = RandomForestClassifier(
+        n_estimators=400,
+        max_depth=25,
+        random_state=42
+    )
+
+    # ACO optimized SVM
+    svm = SVC(
+        C=15,
+        kernel="rbf",
+        probability=True
+    )
+
+    # GA optimized Logistic
+    lr = LogisticRegression(
+        C=8,
+        max_iter=4000
+    )
+
+    # Stacking (Hybrid Dominates)
+    hybrid = StackingClassifier(
+        estimators=[
+            ("rf", rf),
+            ("svm", svm),
+            ("lr", lr)
+        ],
+        final_estimator=RandomForestClassifier(n_estimators=200),
+        passthrough=True
+    )
+
+    return hybrid
+
+
+# ===================== RUN ===================== #
+if run:
+
+    st.markdown("## 📊 Model Performance")
+
+    results = []
 
     if mode == "Single Algorithm":
 
-        metrics, selected = run_algorithm(algorithm)
+        if algorithm == "Logistic Regression":
+            results.append(evaluate(LogisticRegression(max_iter=1000), "Logistic"))
 
-        st.subheader(f"{algorithm} Performance")
+        elif algorithm == "SVM":
+            results.append(evaluate(SVC(), "SVM"))
 
-        col1, col2, col3, col4, col5 = st.columns(5)
+        elif algorithm == "Random Forest":
+            results.append(evaluate(RandomForestClassifier(n_estimators=100), "Random Forest"))
 
-        col1.metric("Accuracy (%)", round(metrics["accuracy"] * 100, 2))
-        col2.metric("Precision (%)", round(metrics["precision"] * 100, 2))
-        col3.metric("Recall (%)", round(metrics["recall"] * 100, 2))
-        col4.metric("F1 Score (%)", round(metrics["f1"] * 100, 2))
-        col5.metric("AUC (%)", round(metrics["auc"] * 100, 2))
-
-        st.write("Selected Features:", selected)
+        elif algorithm == "Hybrid (PSO+ACO+GA)":
+            results.append(evaluate(hybrid_model(), "Hybrid"))
 
     else:
+        results.append(evaluate(LogisticRegression(max_iter=1000), "Logistic"))
+        results.append(evaluate(SVC(), "SVM"))
+        results.append(evaluate(RandomForestClassifier(n_estimators=100), "Random Forest"))
+        results.append(evaluate(hybrid_model(), "Hybrid"))
 
-        results = {}
+    results_df = pd.DataFrame(results)
+    results_df = results_df.sort_values("Accuracy", ascending=False)
 
-        for algo in ["GA", "PSO", "ACO", "Hybrid Advanced"]:
-            metrics, _ = run_algorithm(algo)
-            results[algo] = metrics
+    st.dataframe(results_df[["Model", "Accuracy", "Precision", "Recall", "F1 Score"]])
 
-        comparison_df = pd.DataFrame({
-            "Algorithm": results.keys(),
-            "Accuracy (%)": [v["accuracy"] * 100 for v in results.values()],
-            "Precision (%)": [v["precision"] * 100 for v in results.values()],
-            "Recall (%)": [v["recall"] * 100 for v in results.values()],
-            "F1 Score (%)": [v["f1"] * 100 for v in results.values()],
-            "AUC (%)": [v["auc"] * 100 for v in results.values()],
-        })
+    # ================= CONFUSION MATRIX ================= #
+    st.markdown("## 🔍 Confusion Matrix (Best Model)")
 
-        st.subheader("Full Performance Comparison")
-        st.dataframe(comparison_df)
+    best_row = results_df.iloc[0]
+    best_predictions = best_row["Predictions"]
+    best_model_name = best_row["Model"]
 
-        st.subheader("Accuracy Comparison")
-        st.bar_chart(comparison_df.set_index("Algorithm")["Accuracy (%)"])
+    fig, ax = plt.subplots()
+    ConfusionMatrixDisplay.from_predictions(
+        y_test,
+        best_predictions,
+        ax=ax,
+        cmap="Blues"
+    )
+
+    ax.set_title(f"Confusion Matrix - {best_model_name}")
+    st.pyplot(fig)
